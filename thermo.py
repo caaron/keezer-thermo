@@ -4,7 +4,7 @@ from enum import Enum
 from time import sleep
 import threading
 from keezer import keezer
-
+import mythread
 
 class RelayState(Enum):
     ON = 1
@@ -19,20 +19,26 @@ def signal_handler(sig, frame):
 
 signal.signal(signal.SIGINT, signal_handler)
 
-class therm_service():
+class therm_service(threading.Thread):
     def __init__(self):
         self.keezer = keezer()
         self.signal_exit = False
         self.ok_to_switch = False
         self.relay_state = RelayState.OFF
+        self._stop_event = threading.Event()
+        self.signal_exit = False
 
     def start(self):
         self.start_protection_timer()
         self.main()
 
     def stop(self):
+        self._stop_event.set()
         self.signal_exit = True
-
+        
+    def stopped(self):
+        return self._stop_event.is_set()
+    
     def protection_timer_handler(self):
         self.ok_to_switch = True
         self.relay_timer = None
