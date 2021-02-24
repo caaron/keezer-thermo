@@ -14,13 +14,18 @@ class Ports(Enum):
 class keezer_sockets():
     def __init__(self):
         self.context = zmq.Context()
-        self.socket = self.context.socket(zmq.PAIR)
+        self.rcvsocket = self.context.socket(zmq.SUB)
+        self.sndsocket = self.context.socket(zmq.PUB)
         #setup receiving set temp socket
-        self.socket.bind("tcp://*:%s" % Ports.SET_TEMP.value)
+        self.rcvsocket.bind("tcp://*:%s" % Ports.SET_TEMP.value)
         #setup receiving set hysteresis socket
-        self.socket.bind("tcp://*:%s" % Ports.SET_HYSTERESIS.value)
+        self.rcvsocket.bind("tcp://*:%s" % Ports.SET_HYSTERESIS.value)
         #setup publishing temp socket
-        self.socket.bind("tcp://*:%s" % Ports.PUB_TEMP.value)
+        self.sndsocket.bind("tcp://*:%s" % Ports.PUB_TEMP.value)
+        
+        self.temperature = 0
+        self.compressor_protection = 0
+        self.setpoint = 0
 
     def read_sockets(self):
         try:
@@ -31,6 +36,9 @@ class keezer_sockets():
         except zmq.ZMQError as e:
             if e.strerror is stupid:
                 pass
+
+    def pub_temperature(self,temp):
+        self.sndsocket.send_multipart([b"1", b"%f" % temp])
 
 
     def start(self):
