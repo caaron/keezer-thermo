@@ -3,35 +3,48 @@ import random
 import sys
 import time
 import threading
-from enum import Enum
+from enums import Ports,Topics
 
 
-class Ports(Enum):
-    SET_TEMP = 5556
-    SET_HYSTERESIS = 5557
-    PUB_TEMP = 5558
+
 
 class keezer_sockets():
     def __init__(self):
         self.context = zmq.Context()
-        self.socket = self.context.socket(zmq.PAIR)
+        self.rcvsocket = self.context.socket(zmq.SUB)
+        self.sndsocket = self.context.socket(zmq.PUB)
         #setup receiving set temp socket
-        self.socket.bind("tcp://*:%s" % Ports.SET_TEMP.value)
-        #setup receiving set hysteresis socket
-        self.socket.bind("tcp://*:%s" % Ports.SET_HYSTERESIS.value)
+        self.rcvsocket.bind("tcp://*:%s" % Ports.SUB_PORT.value)
         #setup publishing temp socket
-        self.socket.bind("tcp://*:%s" % Ports.PUB_TEMP.value)
+        self.sndsocket.bind("tcp://*:%s" % Ports.PUBLISH_PORT.value)
+        self.rcvsocket.subscribe("")
+        self.poller = zmq.Poller()
+        self.poller.register(self.rcvsocket, zmq.POLLIN)
+        self.temperature = 0
+        self.compressor_protection = 0
+        self.setpoint = 0
 
+#poll for any new messages
     def read_sockets(self):
         try:
-            if self.socket.recv(flags=NOBLOCK) != None:
-                #process some data
-                pass
+            active_socks = dict(self.poller.poll(timeout=10))
+            if self.rcvsocket in active_socks and active_socks[self.rcvsocket] == zmq.POLLIN:
+                while self.rcvsocket in active_socks and active_socks[self.rcvsocket] == zmq.POLLIN:
+                    msg = self.rcvsocket.recv()
+                    if int(msg) == Topics.SETPOINT.value:       # setpoint
+                        data = self.rcvsocket.recv()
+                        self.setpoint = "%d" % float(data)
+                        print("new setpoint of %d" % (self.setpoint))
 
         except zmq.ZMQError as e:
             if e.strerror is stupid:
                 pass
 
+    def publish_float(self,topic,x):
+        self.sndsocket.send_multipart([b"%d" % topic, b"%f" % x])
+
+    def publish_int(self,topic,x):        
+        self.sndsocket.send_multipart([b"%d" % topic, b"%d" % x])
 
     def start(self):
         self.t = threading.Timer(1,self.read_sockets())
