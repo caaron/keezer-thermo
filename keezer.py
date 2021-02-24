@@ -1,3 +1,5 @@
+
+
 import threading
 from time import sleep,time
 import datetime
@@ -6,6 +8,13 @@ from keezer_sockets import keezer_sockets
 from sensortypes import sensorType
 import board
 import adafruit_dht
+
+# when this can't start because it can't open the GPIO
+#"Unable to set line 23 to input"
+# it's due to pulseio tying up the input
+# ps aux | grep pulseio
+# kill -9 that pid
+
 
 class keezer:
     def __init__(self,t=38.0,h=2.0):
@@ -19,20 +28,21 @@ class keezer:
         self.sockets = keezer_sockets()
         self.ok_to_switch = False
         self.signal_exit = False
+        self.compressor_max_on_time = 5   # in minutes
+        self.failsafe = False
         
 
     def do_sockets(self):
         if False:
-            # this is a silly way to do this, but it allows me
+            # this is a silly way to do this, but it does some
+            # synchronization and allows me
             # to hit breakpoints when there are changes
             if self.setpoint != self.sockets.setpoint:
                 self.setpoint = self.sockets.setpoint
             if self.protection_time != self.sockets.compressor_protection:
                 self.protection_time = self.sockets.compressor_protection
-            # read temp values
-            if self.protection_time != self.sockets.protection_time:
-                self.protection_time = self.sockets.protection_time
-            # send the current temp and relay state
+        # send the current temp and relay state
+        self.sockets.pub_temperature(self.temperature)
 
     def do_temperatures(self):
         # average the temp sensors? 
@@ -45,15 +55,25 @@ class keezer:
         threading.Timer(self.compressor_protection * 60.0, self.protection_timer_handler).start()
         self.ok_to_switch = False
 
+    def on_time_protection_check_handler(self):
+        # need to make sure not to be on forever, even if not getting down to temp
+        if self.relay_state == RelayState.ON:
+            self.relay_state = RelayState.OFF
+            self.failsafe = True    # don't allow us to turn back on (since we don't start the protection timer again)
+            # should sound some kind of alarm
+
     def relay_on(self):
         self.relay_state = RelayState.ON
         # switch value changed, restart relay timer
         self.start_protection_timer()
+        # todo: implement the on time protection timer
+        #threading.Timer(self.compressor_max_on_time * 60.0, self.on_time_protection_check_handler).start()
 
     def relay_off(self):
         self.relay_state = RelayState.OFF
         # switch value changed, restart relay timer
         self.start_protection_timer()
+        # check and kill any protection timers
 
     def relay_toggle(self):
         self.relay_state = self.relay_state ^ 1
@@ -62,7 +82,7 @@ class keezer:
 
     def do_thermostat(self):
         self.do_temperatures()
-        if self.ok_to_switch:     # if compression saftey timer is expired
+        if self.ok_to_switch and self.failsafe == False:     # if compression saftey timer is expired
         # decide if switch will happen
             if self.relay_state == RelayState.OFF:
                 if self.temperature > (self.setpoint + self.hysteresis):
