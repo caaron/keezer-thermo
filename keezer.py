@@ -8,6 +8,7 @@ from keezer_sockets import keezer_sockets
 from sensortypes import sensorType
 import board
 import adafruit_dht
+from enums import Ports,Topics,RelayState
 
 # when this can't start because it can't open the GPIO
 #"Unable to set line 23 to input"
@@ -25,6 +26,7 @@ class keezer:
         # add the sensors in order of priority, first added will be primary
         self.sensors.append(tempsensor(type=sensorType.DHT22,pin=board.D23))
         self.compressor_protection = .3     # in minutes
+        self.relay_state = RelayState.OFF
         self.sockets = keezer_sockets()
         self.ok_to_switch = False
         self.signal_exit = False
@@ -42,7 +44,8 @@ class keezer:
             if self.protection_time != self.sockets.compressor_protection:
                 self.protection_time = self.sockets.compressor_protection
         # send the current temp and relay state
-        self.sockets.pub_temperature(self.temperature)
+        self.sockets.publish_float(Topics.TEMP.value, self.temperature)
+        self.sockets.publish_int(Topics.RELAY_STATE.value, self.relay_state.value)
 
     def do_temperatures(self):
         # average the temp sensors? 
