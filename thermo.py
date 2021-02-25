@@ -16,6 +16,10 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.rcvsocket = self.context.socket(zmq.SUB)
         #setup receiving set temp socket (publish port on the rpi side)
         self.rcvsocket.connect("tcp://10.0.0.154:%s" % Ports.PUBLISH_PORT.value)
+        # send rpi the setpoint
+        self.pubsocket = self.context.socket(zmq.PUB)
+        #setup sending setpoint socket (subscribe port on the rpi side)
+        self.pubsocket.connect("tcp://10.0.0.154:%s" % Ports.SUB_PORT.value)
 
         self.rcvsocket.subscribe("")
         self.poller = zmq.Poller()
@@ -58,14 +62,17 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.lcdNumber.display("%.1f" % self.setpoint)
 
-
+    def send_setpoint(self,x):
+        self.pubsocket.send_multipart([b"%d" % Topics.SETPOINT.value, b"%d" % x])
 
     def sp_up_pressed(self):
         self.setpoint += 1
+        self.send_setpoint(self.setpoint)
         self.lcdNumber.display("%.1f" % self.setpoint)
 
     def sp_down_pressed(self):
         self.setpoint -= 1
+        self.send_setpoint(self.setpoint)
         self.lcdNumber.display("%.1f" % self.setpoint)
 
 
