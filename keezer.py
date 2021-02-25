@@ -35,15 +35,18 @@ class keezer:
         
 
     def do_sockets(self):
-        if False:
-            # this is a silly way to do this, but it does some
-            # synchronization and allows me
-            # to hit breakpoints when there are changes
-            if self.setpoint != self.sockets.setpoint:
-                self.setpoint = self.sockets.setpoint
-            if self.protection_time != self.sockets.compressor_protection:
-                self.protection_time = self.sockets.compressor_protection
-        # send the current temp and relay state
+        topic, data = self.sockets.read_sockets()
+        while data is not None:
+            if topic == Topics.SETPOINT.value:
+                self.setpoint = int(data)
+                print("new setpoint of %d" % self.setpoint)                
+            elif topic == Topics.COMPR_PROTECTION.value:
+                self.compressor_protection = int(data)
+                print("new compressor_protection of %d" % self.compressor_protection)                
+                
+            topic, data = self.sockets.read_sockets()
+
+    # send the current temp and relay state
         self.sockets.publish_float(Topics.TEMP.value, self.temperature)
         self.sockets.publish_int(Topics.RELAY_STATE.value, self.relay_state.value)
 

@@ -20,25 +20,31 @@ class keezer_sockets():
         self.rcvsocket.subscribe("")
         self.poller = zmq.Poller()
         self.poller.register(self.rcvsocket, zmq.POLLIN)
-        self.temperature = 0
-        self.compressor_protection = 0
-        self.setpoint = 0
+        #self.temperature = 0
+        #self.compressor_protection = 0
+        #self.setpoint = 0
 
 #poll for any new messages
     def read_sockets(self):
+        topic, data = None, None
         try:
             active_socks = dict(self.poller.poll(timeout=10))
             if self.rcvsocket in active_socks and active_socks[self.rcvsocket] == zmq.POLLIN:
-                while self.rcvsocket in active_socks and active_socks[self.rcvsocket] == zmq.POLLIN:
-                    msg = self.rcvsocket.recv()
-                    if int(msg) == Topics.SETPOINT.value:       # setpoint
-                        data = self.rcvsocket.recv()
-                        self.setpoint = "%d" % float(data)
-                        print("new setpoint of %d" % (self.setpoint))
+#                while self.rcvsocket in active_socks and active_socks[self.rcvsocket] == zmq.POLLIN:
+                msg = self.rcvsocket.recv()
+                data = self.rcvsocket.recv()
+                topic = int(msg)
+#                    if topic == Topics.SETPOINT.value:       # setpoint
+#                        data = self.rcvsocket.recv()
+#                        self.setpoint = "%d" % float(data)
+                print("rcvd %d,%d" % (topic, int.from_bytes(data, "big")))
+                    
 
         except zmq.ZMQError as e:
             if e.strerror is stupid:
                 pass
+            
+        return topic, data
 
     def publish_float(self,topic,x):
         self.sndsocket.send_multipart([b"%d" % topic, b"%f" % x])

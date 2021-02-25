@@ -11,6 +11,7 @@ class Topics(Enum):
     HYSTERESIS = 2
     TEMP = 3
     RELAY_STATE = 4
+    COMPR_PROTECTION = 5
     
 class RelayState(Enum):
     OFF = 0
