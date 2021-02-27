@@ -25,6 +25,7 @@ class keezer:
         # add the sensors in order of priority, first added will be primary
         self.sensors.append(tempsensor(type=sensorType.DHT22,pin=board.D23))
         self.compressor_protection = .3     # in minutes
+        self.compressor_protection_state = False
         self.relay_state = RelayState.OFF
         self.sockets = keezer_sockets()
         self.ok_to_switch = False
@@ -49,12 +50,15 @@ class keezer:
             elif topic == Topics.COMPR_PROTECTION.value:
                 self.compressor_protection = int(data)
                 print("new compressor_protection of %d" % self.compressor_protection)                
-                
+            elif topic == Topics.RELAY_STATE.value:
+                self.relay_toggle()
+
             topic, data = self.sockets.read_sockets()
 
     # send the current temp and relay state
         self.sockets.publish_float(Topics.TEMP.value, self.temperature)
         self.sockets.publish_int(Topics.RELAY_STATE.value, self.relay_state.value)
+        self.sockets.publish_int(Topics.COMPR_PROTECTION_STATE.value, self.relay_state.value)
 
     def do_temperatures(self):
         # average the temp sensors? 
@@ -62,10 +66,12 @@ class keezer:
 
     def protection_timer_handler(self):
         self.ok_to_switch = True
+        self.compressor_protection_state = False
 
     def start_protection_timer(self):
         threading.Timer(self.compressor_protection * 60.0, self.protection_timer_handler).start()
         self.ok_to_switch = False
+        self.compressor_protection_state = True
 
     def on_time_protection_check_handler(self):
         # need to make sure not to be on forever, even if not getting down to temp
