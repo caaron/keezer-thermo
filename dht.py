@@ -34,6 +34,8 @@ class DHTXX:
             try:
                 # Print the values to the serial port
                 self.temperature_c = self.dhtDevice.temperature
+                if self.temperature_c is type(None):
+                    return False
                 self.temperature_f = self.temperature_c * (9 / 5) + 32
                 self.humidity = self.dhtDevice.humidity
 #                print("Temp: {:.1f} F / {:.1f} C    Humidity: {}% ".format(

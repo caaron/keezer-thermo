@@ -1,5 +1,4 @@
-
-
+import RPi.GPIO as GPIO
 import threading
 from time import sleep,time
 import datetime
@@ -32,6 +31,13 @@ class keezer:
         self.signal_exit = False
         self.compressor_max_on_time = 5   # in minutes
         self.failsafe = False
+        self.relayPin = 26
+        # Pin Setup:
+        GPIO.setmode(GPIO.BCM)  # Broadcom pin-numbering scheme
+        GPIO.setup(self.relayPin, GPIO.OUT)  # LED pin set as output
+
+        # Initial state for LEDs:
+        GPIO.output(self.relayPin, GPIO.LOW)
         
 
     def do_sockets(self):
@@ -70,21 +76,26 @@ class keezer:
 
     def relay_on(self):
         self.relay_state = RelayState.ON
+        GPIO.output(self.relayPin, GPIO.HIGH)
         # switch value changed, restart relay timer
         self.start_protection_timer()
+        print("compressor on")
         # todo: implement the on time protection timer
         #threading.Timer(self.compressor_max_on_time * 60.0, self.on_time_protection_check_handler).start()
 
     def relay_off(self):
         self.relay_state = RelayState.OFF
+        GPIO.output(self.relayPin, GPIO.LOW)
         # switch value changed, restart relay timer
         self.start_protection_timer()
         # check and kill any protection timers
+        print("compressor off")
 
     def relay_toggle(self):
-        self.relay_state = self.relay_state ^ 1
-        # switch value changed, restart relay timer
-        self.start_protection_timer()
+        if self.relay_state == RelayState.OFF:
+            self.relay_on()
+        else:
+            self.relay_off()
 
     def do_thermostat(self):
         self.do_temperatures()
@@ -104,15 +115,20 @@ class keezer:
 
     def service(self):
         self.count = 0
-        while not self.signal_exit:
-            self.do_sockets()
-            self.do_thermostat()
-            #threading.Timer(1, self.service).start()
-            if True:  #(self.count % 10) == 0:
-                ct = datetime.datetime.now()
-                print("keezer service:%s  :: Temp:%f" % (ct,self.temperature))
-            self.count += 1
-            sleep(1)
+        try:
+            while not self.signal_exit:
+                self.do_sockets()
+                self.do_thermostat()
+                #threading.Timer(1, self.service).start()
+                if True:  #(self.count % 10) == 0:
+                    ct = datetime.datetime.now()
+                    print("keezer service:%s  :: Temp:%f" % (ct,self.temperature))
+                self.count += 1
+                sleep(1)
+        except KeyboardInterrupt: # If CTRL+C is pressed, exit cleanly:
+            GPIO.cleanup() # cleanup all GPIO
+            print("exiting keezer service")
+
 
 if __name__ == "__main__":
     mKeezer = keezer()
