@@ -17,3 +17,4 @@ class Topics(Enum):
 class RelayState(Enum):
     OFF = 0
     ON = 1
+    TOGGLE = 2

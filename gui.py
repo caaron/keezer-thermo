@@ -68,3 +68,6 @@ class Ui_MainWindow(object):
         self.pushButton.setText(_translate("MainWindow", "DOWN"))
         self.pushButton_2.setText(_translate("MainWindow", "UP"))
         self.label_relaystate.setText(_translate("MainWindow", "TextLabel"))
+
+    def set_temp_display(self,tmp):
+        self.lcdNumber_2.display(tmp)
