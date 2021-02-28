@@ -1,89 +1,119 @@
-import signal
 import sys
-from enum import Enum
-from time import sleep
 import threading
-from keezer import keezer
-import mythread
+from time import sleep
 
-class RelayState(Enum):
-    ON = 1
-    OFF = 0
+from PyQt5 import QtCore, QtGui, QtWidgets, uic
+from PyQt5.QtWidgets import QVBoxLayout
+from QLed import QLed
+import zmq
+from enums import RelayState,Topics,Ports
+
+qtCreatorFile = "gui.ui" # Enter file here.
+Ui_MainWindow, QtBaseClass = uic.loadUiType(qtCreatorFile)
 
 
-signal_exit = False
-
-def signal_handler(sig, frame):
-    print('You pressed Ctrl+C!')
-    signal_exit = True
-
-signal.signal(signal.SIGINT, signal_handler)
-
-class therm_service(threading.Thread):
+class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def __init__(self):
-        self.keezer = keezer()
-        self.signal_exit = False
-        self.ok_to_switch = False
-        self.relay_state = RelayState.OFF
-        self._stop_event = threading.Event()
-        self.signal_exit = False
+        QtWidgets.QMainWindow.__init__(self)
+        Ui_MainWindow.__init__(self)
+        self.setupUi(self)
+        self.context = zmq.Context()
+        self.rpi_IP = "10.0.0.195"
+        self.rcvsocket = self.context.socket(zmq.SUB)
+        #setup receiving set temp socket (publish port on the rpi side)
+        self.rcvsocket.connect("tcp://%s:%s" % (self.rpi_IP,Ports.PUBLISH_PORT.value))
+        # send rpi the setpoint
+        self.pubsocket = self.context.socket(zmq.PUB)
+        #setup sending setpoint socket (subscribe port on the rpi side)
+        self.pubsocket.connect("tcp://%s:%s" % (self.rpi_IP,Ports.SUB_PORT.value))
 
-    def start(self):
-        self.start_protection_timer()
-        self.main()
+        self.rcvsocket.subscribe("")
+        self.poller = zmq.Poller()
+        self.poller.register(self.rcvsocket, zmq.POLLIN)
 
-    def stop(self):
-        self._stop_event.set()
-        self.signal_exit = True
-        
-    def stopped(self):
-        return self._stop_event.is_set()
-    
-    def protection_timer_handler(self):
-        self.ok_to_switch = True
-        self.relay_timer = None
+        self.temperature = 0
+        self.setpoint = 38
+        self.lcdNumber.display("%.1f" % self.setpoint)
 
-    def start_protection_timer(self):
-        threading.Timer(self.keezer.compressor_protection * 60.0, self.protection_timer_handler).start()
-        self.ok_to_switch = False
+        self.pushButton_2.clicked.connect(self.sp_up_pressed)
+        self.pushButton.clicked.connect(self.sp_down_pressed)
+        self.pushButton_enable.clicked.connect(self.enable_pressed)
+        self.pushButton_toggle.clicked.connect(self.toggle_pressed)
 
-    def relay_on(self):
-        self.relay_state = RelayState.ON
-        self.start_protection_timer()
+        self.timer = QtCore.QTimer()
+        self.timer.timeout.connect(self.update_display)
+        self.timer.start(1000)  # every 1000 milliseconds
 
-    def relay_off(self):
-        self.relay_state = RelayState.OFF
-        self.start_protection_timer()
+        self.label_relaystate.setText("Relay State")
+        self.led_relay = QLed(self, onColour=QLed.Green, shape=QLed.Circle)
+        self.led_relay.value = False
+        self.gridLayout_relay.addWidget(self.led_relay)
 
-    def relay_toggle(self):
-        self.relay_state = self.relay_state ^ 1
-        self.start_protection_timer()
+        self.label_comp_protect_state.setText("Comp Timer")
+        self.led_ptime = QLed(self, onColour=QLed.Red, shape=QLed.Circle)
+        self.led_ptime.value = False
+        self.gridLayout_protection.addWidget(self.led_ptime)
 
-    def main(self):
-        while not self.signal_exit:
-            # update values received from sockets
-            if self.ok_to_switch:
-                if self.relay_state == RelayState.OFF:
-                    if self.keezer.temperature > (self.keezer.setpoint + self.keezer.hysteresis):
-                        self.relay_on()
-                else:   # relay is ON
-                    if self.keezer.temperature < (self.keezer.setpoint - self.keezer.hysteresis):
-                        self.relay_off()
-            else:
-                pass
 
-        # decide if switch will happen
-        # if switch value changed, restart relay timer
-            sleep(1)
+    def get_msgs(self):
+        topic, data = None, None
+        active_socks = dict(self.poller.poll(timeout=10))
+        if self.rcvsocket in active_socks and active_socks[self.rcvsocket] == zmq.POLLIN:
+            active_socks = dict(self.poller.poll(timeout=10))
+            if self.rcvsocket in active_socks and active_socks[self.rcvsocket] == zmq.POLLIN:
+                msg = self.rcvsocket.recv()
+                topic = int(msg)
+                data = self.rcvsocket.recv()
+        return topic, data
+
+
+    def update_display(self):
+        topic, data = self.get_msgs()
+        while topic is not None:
+            if topic == Topics.TEMP.value:       # temperature
+                self.label_2.hide()
+                temp = "%.1f" % float(data)
+                self.lcdNumber_2.display(temp)
+                sleep(.1)
+                self.label_2.show()
+            elif topic == Topics.RELAY_STATE.value:
+                self.label_relaystate.hide()
+                self.led_relay.value = bool(int(data))
+                sleep(.5)
+                self.label_relaystate.show()
+            elif topic == Topics.COMPR_PROTECTION_STATE.value:
+                self.led_ptime.value = bool(int(data))
+
+            topic, data = self.get_msgs()
+
+        self.lcdNumber.display("%.1f" % self.setpoint)
+
+    def send_setpoint(self,x):
+        self.pubsocket.send_multipart([b"%d" % Topics.SETPOINT.value, b"%d" % x])
+
+    def sp_up_pressed(self):
+        self.setpoint += 1
+        self.send_setpoint(self.setpoint)
+        self.lcdNumber.display("%.1f" % self.setpoint)
+
+    def sp_down_pressed(self):
+        self.setpoint -= 1
+        self.send_setpoint(self.setpoint)
+        self.lcdNumber.display("%.1f" % self.setpoint)
+
+    def toggle_enable_timeout_handler(self):
+        self.pushButton_toggle.setEnabled(False)
+
+    def enable_pressed(self):
+        self.pushButton_toggle.setEnabled(True)
+        threading.Timer(30, self.toggle_enable_timeout_handler).start()
+
+    def toggle_pressed(self):
+        self.pubsocket.send_multipart([b"%d" % Topics.RELAY_STATE.value, b"%d" % RelayState.TOGGLE.value])
+
 
 if __name__ == "__main__":
-    tservice = therm_service()
-    tservice.start()
-    #print any relevant messages
-    # wait for ctrl-C to stop
-    while (signal_exit is False):
-        sleep(1)
-
-    # do any needed cleanup
-    signal.pause()
-    tservice.stop()
+    app = QtWidgets.QApplication(sys.argv)
+    window = MyWindow()
+    window.show()
+    sys.exit(app.exec_())
