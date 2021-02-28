@@ -1,0 +1,2 @@
+sudo apt-get install qt5-default pyqt5-dev pyqt5-dev-tools vim libgpiod-dev
+sudo pip3 install adafruit-circuitpython-dht

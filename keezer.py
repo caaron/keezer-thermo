@@ -1,5 +1,4 @@
-
-
+import RPi.GPIO as GPIO
 import threading
 from time import sleep,time
 import datetime
@@ -25,27 +24,41 @@ class keezer:
         self.sensors = []
         # add the sensors in order of priority, first added will be primary
         self.sensors.append(tempsensor(type=sensorType.DHT22,pin=board.D23))
-        self.compressor_protection = .3     # in minutes
+        self.compressor_protection = 1     # in minutes
+        self.compressor_protection_state = True
         self.relay_state = RelayState.OFF
         self.sockets = keezer_sockets()
         self.ok_to_switch = False
         self.signal_exit = False
         self.compressor_max_on_time = 5   # in minutes
         self.failsafe = False
+        self.relayPin = 26
+        # Pin Setup:
+        GPIO.setmode(GPIO.BCM)  # Broadcom pin-numbering scheme
+        GPIO.setup(self.relayPin, GPIO.OUT)  # LED pin set as output
+
+        # put relay in a known state
+        self.relay_off()
         
 
     def do_sockets(self):
-        if False:
-            # this is a silly way to do this, but it does some
-            # synchronization and allows me
-            # to hit breakpoints when there are changes
-            if self.setpoint != self.sockets.setpoint:
-                self.setpoint = self.sockets.setpoint
-            if self.protection_time != self.sockets.compressor_protection:
-                self.protection_time = self.sockets.compressor_protection
-        # send the current temp and relay state
+        topic, data = self.sockets.read_sockets()
+        while data is not None:
+            if topic == Topics.SETPOINT.value:
+                self.setpoint = int(data)
+                print("new setpoint of %d" % self.setpoint)                
+            elif topic == Topics.COMPR_PROTECTION.value:
+                self.compressor_protection = int(data)
+                print("new compressor_protection of %d" % self.compressor_protection)                
+            elif topic == Topics.RELAY_STATE.value:
+                self.relay_toggle()
+
+            topic, data = self.sockets.read_sockets()
+
+    # send the current temp and relay state
         self.sockets.publish_float(Topics.TEMP.value, self.temperature)
         self.sockets.publish_int(Topics.RELAY_STATE.value, self.relay_state.value)
+        self.sockets.publish_int(Topics.COMPR_PROTECTION_STATE.value, self.compressor_protection_state)
 
     def do_temperatures(self):
         # average the temp sensors? 
@@ -53,10 +66,14 @@ class keezer:
 
     def protection_timer_handler(self):
         self.ok_to_switch = True
+        self.compressor_protection_state = False
+        print("compressor_protection_state = False")
 
     def start_protection_timer(self):
         threading.Timer(self.compressor_protection * 60.0, self.protection_timer_handler).start()
         self.ok_to_switch = False
+        self.compressor_protection_state = True
+        print("compressor_protection_state = True for :%d minutes" % (self.compressor_protection))
 
     def on_time_protection_check_handler(self):
         # need to make sure not to be on forever, even if not getting down to temp
@@ -67,21 +84,26 @@ class keezer:
 
     def relay_on(self):
         self.relay_state = RelayState.ON
+        GPIO.output(self.relayPin, GPIO.HIGH)
         # switch value changed, restart relay timer
         self.start_protection_timer()
+        print("compressor on")
         # todo: implement the on time protection timer
         #threading.Timer(self.compressor_max_on_time * 60.0, self.on_time_protection_check_handler).start()
 
     def relay_off(self):
         self.relay_state = RelayState.OFF
+        GPIO.output(self.relayPin, GPIO.LOW)
         # switch value changed, restart relay timer
         self.start_protection_timer()
         # check and kill any protection timers
+        print("compressor off")
 
     def relay_toggle(self):
-        self.relay_state = self.relay_state ^ 1
-        # switch value changed, restart relay timer
-        self.start_protection_timer()
+        if self.relay_state == RelayState.OFF:
+            self.relay_on()
+        else:
+            self.relay_off()
 
     def do_thermostat(self):
         self.do_temperatures()
@@ -97,19 +119,38 @@ class keezer:
             pass
 
         sleep(1)
-        
+
+    def print_vars(self):
+        print("setpoint:%d" %  self.setpoint)
+        print("temperature:%.02f" % self.temperature)
+        print("relay state:%s = %d = %r" % ("ON" if self.relay_state == RelayState.ON else "OFF",
+                                            int(self.relay_state.value), bool(int(self.relay_state.value)) ))
+        print("ok_to_switch:%r" % bool(self.ok_to_switch))
+        print("comp protection state:%r" % bool(self.compressor_protection_state))
+        print("failsafe state:%r" % bool(self.failsafe))
+        print("")
 
     def service(self):
         self.count = 0
-        while not self.signal_exit:
-            self.do_sockets()
-            self.do_thermostat()
-            #threading.Timer(1, self.service).start()
-            if True:  #(self.count % 10) == 0:
-                ct = datetime.datetime.now()
-                print("keezer service:%s  :: Temp:%f" % (ct,self.temperature))
-            self.count += 1
-            sleep(1)
+        self.last_temp = self.temperature
+        self.print_vars()
+        try:
+            while not self.signal_exit:
+                self.do_sockets()
+                self.do_thermostat()
+                #threading.Timer(1, self.service).start()
+                #if True:  #(self.count % 10) == 0:
+                if self.last_temp != self.temperature:
+                    ct = datetime.datetime.now()
+                    print("keezer service:%s  :: Temp:%.02f" % (ct,self.temperature))
+                    self.last_temp = self.temperature
+                    self.print_vars()
+                self.count += 1
+                sleep(1)
+        except KeyboardInterrupt: # If CTRL+C is pressed, exit cleanly:
+            GPIO.cleanup() # cleanup all GPIO
+            print("exiting keezer service")
+
 
 if __name__ == "__main__":
     mKeezer = keezer()
