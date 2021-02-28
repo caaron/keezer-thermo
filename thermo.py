@@ -1,5 +1,6 @@
 import sys
 import threading
+from time import sleep
 
 from PyQt5 import QtCore, QtGui, QtWidgets, uic
 from PyQt5.QtWidgets import QVBoxLayout
@@ -17,13 +18,14 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         Ui_MainWindow.__init__(self)
         self.setupUi(self)
         self.context = zmq.Context()
+        self.rpi_IP = "10.0.0.195"
         self.rcvsocket = self.context.socket(zmq.SUB)
         #setup receiving set temp socket (publish port on the rpi side)
-        self.rcvsocket.connect("tcp://10.0.0.154:%s" % Ports.PUBLISH_PORT.value)
+        self.rcvsocket.connect("tcp://%s:%s" % (self.rpi_IP,Ports.PUBLISH_PORT.value))
         # send rpi the setpoint
         self.pubsocket = self.context.socket(zmq.PUB)
         #setup sending setpoint socket (subscribe port on the rpi side)
-        self.pubsocket.connect("tcp://10.0.0.154:%s" % Ports.SUB_PORT.value)
+        self.pubsocket.connect("tcp://%s:%s" % (self.rpi_IP,Ports.SUB_PORT.value))
 
         self.rcvsocket.subscribe("")
         self.poller = zmq.Poller()
@@ -48,7 +50,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.gridLayout_relay.addWidget(self.led_relay)
 
         self.label_comp_protect_state.setText("Comp Timer")
-        self.led_ptime = QLed(self, onColour=QLed.Green, shape=QLed.Circle)
+        self.led_ptime = QLed(self, onColour=QLed.Red, shape=QLed.Circle)
         self.led_ptime.value = False
         self.gridLayout_protection.addWidget(self.led_ptime)
 
@@ -69,12 +71,18 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         topic, data = self.get_msgs()
         while topic is not None:
             if topic == Topics.TEMP.value:       # temperature
+                self.label_2.hide()
                 temp = "%.1f" % float(data)
                 self.lcdNumber_2.display(temp)
+                sleep(.1)
+                self.label_2.show()
             elif topic == Topics.RELAY_STATE.value:
-                self.led.value = int(data)
+                self.label_relaystate.hide()
+                self.led_relay.value = bool(int(data))
+                sleep(.5)
+                self.label_relaystate.show()
             elif topic == Topics.COMPR_PROTECTION_STATE.value:
-                self.led.value = int(data)
+                self.led_ptime.value = bool(int(data))
 
             topic, data = self.get_msgs()
 
