@@ -18,7 +18,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         Ui_MainWindow.__init__(self)
         self.setupUi(self)
         self.context = zmq.Context()
-        self.rpi_IP = "10.0.0.195"
+        self.rpi_IP = "10.0.0.203"
         self.rcvsocket = self.context.socket(zmq.SUB)
         #setup receiving set temp socket (publish port on the rpi side)
         self.rcvsocket.connect("tcp://%s:%s" % (self.rpi_IP,Ports.PUBLISH_PORT.value))
