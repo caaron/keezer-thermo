@@ -1,6 +1,5 @@
 import time
-import board
-import adafruit_dht
+import dht11
 from sensortypes import sensorType
 
 #dhtDevice = adafruit_dht.DHT22(board.D23)
@@ -18,9 +17,9 @@ class DHTXX:
         self.temperature_c = -999
 
         if self.type == sensorType.DHT22 and self.pin is not None:
-            self.dhtDevice = adafruit_dht.DHT22(self.pin)
+            self.dhtDevice = dht11.DHT11(self.pin)
         elif self.type == sensorType.DHT11 and self.pin is not None:
-            self.dhtDevice = adafruit_dht.DHT11(self.pin)
+            self.dhtDevice = dht11.DHT11(self.pin)
         else:
             self.dhtDevice = None
             

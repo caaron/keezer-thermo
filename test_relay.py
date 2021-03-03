@@ -1,5 +1,5 @@
 # External module imports
-import RPi.GPIO as GPIO
+#import RPi.GPIO as GPIO
 import time
 
 # Pin Definitons:

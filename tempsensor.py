@@ -1,7 +1,7 @@
 import math
 from ds18b20 import DS18B20
 import threading
-from dht import DHTXX
+from DHTXX import DHT11,DHT11Result
 from sensortypes import sensorType
 
 
@@ -17,9 +17,9 @@ class tempsensor:
         if type == sensorType.DS18B20:
             self.sensor = DS18B20()            
         elif type == sensorType.DHT11:
-            self.sensor = DHTXX(type=sensorType.DHT11,pin=self.pin)
+            self.sensor = DHT11(pin=self.pin)
         elif type == sensorType.DHT22:
-            self.sensor = DHTXX(type=sensorType.DHT22,pin=self.pin)
+            self.sensor = DHT11(pin=self.pin)
         else:
             self.sensor = None
 
@@ -32,9 +32,18 @@ class tempsensor:
             self.reads += 1
         else:                    
             try:
-                self.temp = self.sensor.tempF()
-                result = self.temp
+                if type(self.sensor) == DHT11:
+                    self.temp = self.sensor.read()
+                    result = self.temp.temperature_f
+                elif type(self.sensor) == DS18B20: 
+                    self.temp = self.sensor.tempF()
+                    result = self.temp
+                else:
+                    tempC = self.sensor.read()
+                    self.temp = (tempC * 9.0/5.0) + 32
+                    result = self.temp
             except Exception as error:
+                print(error)
                 raise error
             
         return result

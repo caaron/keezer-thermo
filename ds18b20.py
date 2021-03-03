@@ -37,7 +37,7 @@ class DS18B20:
             self._device_file.append(device_folder[i] + '/w1_slave')
             i += 1
 
-    def _read_temp(self, index):
+    def read(self, index=0):
         # Issue one read to one sensor
         # you should not call this directly
         f = open(self._device_file[index], 'r')
@@ -48,13 +48,13 @@ class DS18B20:
     def tempC(self, index=0):
         # call this to get the temperature in degrees C
         # detected by a sensor
-        lines = self._read_temp(index)
+        lines = self.read(index)
         retries = 5
         while (lines[0].strip()[-3:] != 'YES') and (retries > 0):
             # read failed so try again
             time.sleep(0.1)
             # print('Read Failed', retries)
-            lines = self._read_temp(index)
+            lines = self.read(index)
             retries -= 1
 
         if retries == 0:

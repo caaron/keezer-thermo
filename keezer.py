@@ -1,12 +1,13 @@
-import RPi.GPIO as GPIO
+import ASUS.GPIO as GPIO
+
 import threading
 from time import sleep,time
 import datetime
 from tempsensor import tempsensor
 from keezer_sockets import keezer_sockets
 from sensortypes import sensorType
-import board
-import adafruit_dht
+
+
 from enums import Ports,Topics,RelayState
 
 # when this can't start because it can't open the GPIO
@@ -22,8 +23,6 @@ class keezer:
         self.setpoint = t
         self.hysteresis = h
         self.sensors = []
-        # add the sensors in order of priority, first added will be primary
-        self.sensors.append(tempsensor(type=sensorType.DHT22,pin=board.D23))
         self.compressor_protection = 1     # in minutes
         self.compressor_protection_state = True
         self.relay_state = RelayState.OFF
@@ -32,13 +31,22 @@ class keezer:
         self.signal_exit = False
         self.compressor_max_on_time = 5   # in minutes
         self.failsafe = False
-        self.relayPin = 26
+        
+        self.relay1 = 26
+        self.relay2 = 20
+        self.relay3 = 21
+        self.relayPin = self.relay2
         # Pin Setup:
+        GPIO.setwarnings(False)
         GPIO.setmode(GPIO.BCM)  # Broadcom pin-numbering scheme
         GPIO.setup(self.relayPin, GPIO.OUT)  # LED pin set as output
 
         # put relay in a known state
         self.relay_off()
+
+        # add the sensors in order of priority, first added will be primary
+        self.sensors.append(tempsensor(type=sensorType.DS18B20,pin=999))
+        self.sensors.append(tempsensor(type=sensorType.DHT11,pin=18))
         
 
     def do_sockets(self):
@@ -62,7 +70,11 @@ class keezer:
 
     def do_temperatures(self):
         # average the temp sensors? 
-        self.temperature = self.sensors[0].read()
+        tmp = []
+        for sensor in self.sensors:
+             tmp.append(sensor.read())
+        # right now, only use the first sensor
+        self.temperature = tmp[0]
 
     def protection_timer_handler(self):
         self.ok_to_switch = True
