@@ -13,6 +13,8 @@ class Topics(Enum):
     RELAY_STATE = 4
     COMPR_PROTECTION = 5
     COMPR_PROTECTION_STATE = 6
+    ONTIME = 7
+    OFFTIME = 8
 
 class RelayState(Enum):
     OFF = 0
