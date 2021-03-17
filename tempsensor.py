@@ -3,6 +3,7 @@ from ds18b20 import DS18B20
 import threading
 from DHTXX import DHT11,DHT11Result
 from sensortypes import sensorType
+import time
 
 
 
@@ -33,8 +34,15 @@ class tempsensor:
         else:                    
             try:
                 if type(self.sensor) == DHT11:
-                    self.temp = self.sensor.read()
-                    result = self.temp.temperature_f
+                    err = 1
+                    while err is not DHT11Result.ERR_NO_ERROR:
+                        r = self.sensor.read()
+                        err = r.error_code
+                        if err is DHT11Result.ERR_NO_ERROR:
+                            self.temp = r.temperature_f
+                            self.humidity = r.humidity
+                        result = self.temp
+                    
                 elif type(self.sensor) == DS18B20: 
                     self.temp = self.sensor.tempF()
                     result = self.temp
@@ -42,6 +50,19 @@ class tempsensor:
                     tempC = self.sensor.read()
                     self.temp = (tempC * 9.0/5.0) + 32
                     result = self.temp
+            except Exception as error:
+                print(error)
+                raise error
+            
+        return result
+
+    def read_sensor_humidity(self):
+        result = None
+        if self.sensor is not None:
+            try:
+                if type(self.sensor) == DHT11:
+                    result = self.humidity
+
             except Exception as error:
                 print(error)
                 raise error
