@@ -4,3 +4,8 @@ __pycache__/ds18b20.cpython-39.pyc
 __pycache__/dht.cpython-39.pyc
 __pycache__/tempsensor.cpython-39.pyc
 __pycache__/sensortypes.cpython-39.pyc
+__pycache__/DHTXX.cpython-39.pyc
+sensortypes.pyc
+tempsensor.pyc
+DHTXX.pyc
+ds18b20.pyc

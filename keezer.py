@@ -6,9 +6,12 @@ import datetime
 from tempsensor import tempsensor
 from keezer_sockets import keezer_sockets
 from sensortypes import sensorType
-
+import sqlite3
+from sqlite3 import Error
 
 from enums import Ports,Topics,RelayState
+from influxdb_client import InfluxDBClient, Point, WritePrecision
+from influxdb_client.client.write_api import SYNCHRONOUS
 
 # when this can't start because it can't open the GPIO
 #"Unable to set line 23 to input"
@@ -20,6 +23,8 @@ from enums import Ports,Topics,RelayState
 class keezer:
     def __init__(self,t=38.0,h=2.0):
         self.temperature = t
+        self.humidity = 0
+        self.air_temperature = t
         self.setpoint = t
         self.hysteresis = h
         self.sensors = []
@@ -31,6 +36,26 @@ class keezer:
         self.signal_exit = False
         self.compressor_max_on_time = 5   # in minutes
         self.failsafe = False
+        self.simulate = False
+        self.sql = sqlite3.connect("keezer.sql")
+        self.ontime = 1
+        self.offtime = 1
+        self.relayTime = 0
+        self.relayChangeTime = time()
+        from datetime import datetime
+
+
+        # You can generate a Token from the "Tokens Tab" in the UI
+        self.influx_token = "LS_CSh06vCL049Eiuk1NrC2Q9XQdtHOh0KX5f3cP6KSWiPDk5uBvQ_0mOQIO1IFidbd2XMH5T_G-FoGfT5aqRg=="
+        self.influx_org = "c.aaron.hall@gmail.com"
+        self.influx_bucket = "c.aaron.hall's Bucket"
+
+        self.influx_client = InfluxDBClient(url="https://us-central1-1.gcp.cloud2.influxdata.com", token=self.influx_token)
+        self.write_api = self.influx_client.write_api(write_options=SYNCHRONOUS)
+
+        #data = "mem,host=host1 used_percent=23.43234543"
+        #self.write_api.write(self.influx_bucket, self.influx_org, data)
+
         
         self.relay1 = 26
         self.relay2 = 20
@@ -47,6 +72,33 @@ class keezer:
         # add the sensors in order of priority, first added will be primary
         self.sensors.append(tempsensor(type=sensorType.DS18B20,pin=999))
         self.sensors.append(tempsensor(type=sensorType.DHT11,pin=18))
+
+    def __del__(self):
+        if self.sql:
+            self.sql.close()
+
+    def init_db(self):
+        c = self.sql.cursor()
+        name = "runtimes"
+        #get the count of tables with the name
+        c.execute(''' SELECT count(name) FROM sqlite_master WHERE type='table' AND name='%s' ''' % name)
+
+        #if the count is 1, then table exists
+        if c.fetchone()[0]==0:
+            sql_create_projects_table = """CREATE TABLE IF NOT EXISTS %s (
+                                    id integer PRIMARY KEY,
+                                    name text NOT NULL,
+                                    priority integer,
+                                    status_id integer NOT NULL,
+                                    project_id integer NOT NULL,
+                                    begin_date text NOT NULL,
+                                    end_date text NOT NULL,
+                                    FOREIGN KEY (project_id) REFERENCES projects (id)
+                                );"""  % name
+
+
+            print('creating table.')
+            create_table(self.sql, sql_create_projects_table)
         
 
     def do_sockets(self):
@@ -67,14 +119,59 @@ class keezer:
         self.sockets.publish_float(Topics.TEMP.value, self.temperature)
         self.sockets.publish_int(Topics.RELAY_STATE.value, self.relay_state.value)
         self.sockets.publish_int(Topics.COMPR_PROTECTION_STATE.value, self.compressor_protection_state)
+        self.sockets.publish_int(Topics.ONTIME.value, self.ontime)
+        self.sockets.publish_int(Topics.OFFTIME.value, self.offtime)
+        self.sockets.publish_int(Topics.SETPOINT.value, self.setpoint)
+        self.sockets.publish_int(Topics.AIR_TEMPERATURE.value, self.air_temperature)
+        
+        try:
+            # publish temperature to influx DB
+            point = Point("temp")\
+                .tag("host", "host1")\
+                .field("temperature", self.temperature)\
+                .time(datetime.datetime.utcnow(), WritePrecision.NS)
+            self.write_api.write(self.influx_bucket, self.influx_org, point)
+            # publish DHT11 temperature to influx DB
+            point = Point("temp")\
+                .tag("host", "host1")\
+                .field("air_temperature", self.air_temperature)\
+                .time(datetime.datetime.utcnow(), WritePrecision.NS)
+            self.write_api.write(self.influx_bucket, self.influx_org, point)
+            # publish DHT11 humidity to influx DB
+            point = Point("temp")\
+                .tag("host", "host1")\
+                .field("DHT_humidity", self.humidity)\
+                .time(datetime.datetime.utcnow(), WritePrecision.NS)
+            self.write_api.write(self.influx_bucket, self.influx_org, point)
+            # publish relaystate to influx DB
+            point = Point("temp")\
+                .tag("host", "host1")\
+                .field("RelayState", int(self.relay_state.value))\
+                .time(datetime.datetime.utcnow(), WritePrecision.NS)
+            self.write_api.write(self.influx_bucket, self.influx_org, point)
+
+        except Exception as e:
+            print("Exception on influxDB write!")
+
+        #data = "mem,host=host1 used_percent=23.43234543"
+        #self.write_api.write(self.influx_bucket, self.influx_org, data)
+        
 
     def do_temperatures(self):
         # average the temp sensors? 
         tmp = []
+        humids = []
         for sensor in self.sensors:
-             tmp.append(sensor.read())
+             tmp.append(sensor.read())             
+             humids.append(sensor.read_sensor_humidity())
         # right now, only use the first sensor
         self.temperature = tmp[0]
+        self.humidity = humids[1]
+        if tmp[1] > 0 and tmp[1] < 70:
+            self.air_temperature = tmp[1]
+        else:
+            print("received an out of bounds DHT temp!!")
+
 
     def protection_timer_handler(self):
         self.ok_to_switch = True
@@ -94,12 +191,21 @@ class keezer:
             self.failsafe = True    # don't allow us to turn back on (since we don't start the protection timer again)
             # should sound some kind of alarm
 
+    def do_relay_times(self):
+        diff = time() - self.relayChangeTime
+        if self.relay_state == RelayState.ON:
+            self.offtime += diff
+        else:
+            self.ontime += diff
+        self.relayChangeTime = time()
+
     def relay_on(self):
         self.relay_state = RelayState.ON
         GPIO.output(self.relayPin, GPIO.HIGH)
         # switch value changed, restart relay timer
         self.start_protection_timer()
         print("compressor on")
+        self.do_relay_times()
         # todo: implement the on time protection timer
         #threading.Timer(self.compressor_max_on_time * 60.0, self.on_time_protection_check_handler).start()
 
@@ -110,6 +216,7 @@ class keezer:
         self.start_protection_timer()
         # check and kill any protection timers
         print("compressor off")
+        self.do_relay_times()
 
     def relay_toggle(self):
         if self.relay_state == RelayState.OFF:
@@ -119,13 +226,13 @@ class keezer:
 
     def do_thermostat(self):
         self.do_temperatures()
-        if self.ok_to_switch and self.failsafe == False:     # if compression saftey timer is expired
+        if self.ok_to_switch and self.failsafe == False and self.simulate == False:     # if compression saftey timer is expired
         # decide if switch will happen
             if self.relay_state == RelayState.OFF:
                 if self.temperature > (self.setpoint + self.hysteresis):
                     self.relay_on()
             else:   # relay is ON
-                if self.temperature < (self.setpoint - self.hysteresis):
+                if self.temperature < (self.setpoint):
                     self.relay_off()
         else:
             pass
@@ -140,6 +247,10 @@ class keezer:
         print("ok_to_switch:%r" % bool(self.ok_to_switch))
         print("comp protection state:%r" % bool(self.compressor_protection_state))
         print("failsafe state:%r" % bool(self.failsafe))
+        on_percentage = float(self.ontime)*100/float(self.ontime + self.offtime)
+        print("ontime:%.2f  %d seconds" % (on_percentage,self.ontime))
+        off_percentage = float(self.offtime)*100/float(self.ontime + self.offtime)
+        print("offtime:%.2f  %d seconds" % (off_percentage,self.offtime))
         print("")
 
     def service(self):
