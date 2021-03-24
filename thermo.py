@@ -78,13 +78,13 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # which defines a single set of axes as self.axes.
         self.sc = MplCanvas(self, width=5, height=4, dpi=100)
         
-        self.maxdatalength = 1000
+        self.maxdatalength = 2500
         self.xdata = []
         self.tmpdata = []
         self.spdata = []
         self.rdata = []
-        self.ydata = []
-        self._plot_ref = None
+        self.ydata = []        
+        #self._plot_ref = None
 
         if False:
             self.tab.layout = QVBoxLayout(self)
@@ -157,6 +157,13 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 data = self.rcvsocket.recv()
         return topic, data
 
+    def average(self,x):
+        avg = 0.0
+        for a in x:
+            avg += a
+        avg = avg / len(x)
+        return avg
+
     def plot_temps(self,time,temp):
         t2 = datetime.datetime.fromtimestamp(time)
         t = t2.strftime("%H:%M:%S")
@@ -167,11 +174,13 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.tmpdata = [temp] * (self.maxdatalength)
             self.spdata = [self.setpoint] * self.maxdatalength
             self.rdata = [0] * self.maxdatalength
+            self.avg = [self.average(self.tmpdata)] * self.maxdatalength
         else:
             #self.xdata = self.xdata[1:] + [t]
             self.tmpdata = self.tmpdata[1:] + [temp]
             self.spdata = self.spdata[1:] + [self.setpoint]
             self.rdata = self.rdata[1:] + [int(self.led_relay.value)]
+            self.avg = [self.average(self.tmpdata)] * self.maxdatalength
 
         self.ydata = self.tmpdata
         #if self._plot_ref is None:
@@ -182,6 +191,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.sc.axes.cla()
         self.sc.axes.plot(self.xdata,self.ydata,'r')
         self.sc.axes.plot(self.xdata,self.spdata,'b')
+        self.sc.axes.plot(self.xdata,self.avg,'tab:orange')
         self.sc.ax2.cla()
         self.sc.ax2.plot(self.xdata,self.rdata,'g')
         self.sc.draw()
@@ -198,17 +208,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 if temp != v:
                     self.add_db_event(0,time=t,rs=int(self.led_relay.value),temp=v)
                 self.lcdNumber_2.display(temp)
-                if False:
-                    self.ydata = self.ydata[1:] + [temp]
-                    if self._plot_ref is None:
-                        plot_refs = self.sc.axes.plot(self.xdata, self.ydata, 'r')
-                        self._plot_ref = plot_refs[0]
-                    else:
-                        self._plot_ref.set_ydata(self.ydata) 
-    #                    self.sc.axes._plot_ref.set_ydata([0,1,2,3,4], [r,r+1,20,3,40])
-                    self.sc.draw()
-                else:
-                    self.plot_temps(round(t),temp)
+                self.plot_temps(round(t),temp)
 
             elif topic == Topics.RELAY_STATE.value:
                 self.led_relay.value = bool(int(data))
@@ -217,11 +217,16 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             elif topic == Topics.ONTIME.value:
                 self.ontime = int(data)
                 on_percentage = float(self.ontime)*100/float(self.ontime + self.offtime)
-                self.label_ontime.setText("ON:%.1f%% %s seconds" % (on_percentage, int(data)))
+                self.label_ontime.setText("ON:%.1f%%\n%s seconds" % (on_percentage, int(data)))
             elif topic == Topics.OFFTIME.value:
                 self.offtime = int(data)
                 off_percentage = float(self.offtime)*100/float(self.ontime + self.offtime)
-                self.label_offtime.setText("OFF:%.1f%% %s seconds" % (off_percentage,  int(data)))
+                self.label_offtime.setText("OFF:%.1f%%\n%s seconds" % (off_percentage,  int(data)))
+            elif topic == Topics.SETPOINT.value:
+                if self.setpoint != int(data):
+                    self.setpoint = int(data)
+
+                #print("rcvd setpoint")
 
             topic, data = self.get_msgs()
 

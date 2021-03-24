@@ -15,7 +15,9 @@ class Topics(Enum):
     COMPR_PROTECTION_STATE = 6
     ONTIME = 7
     OFFTIME = 8
-
+    AIR_TEMPERATURE = 9
+    RELAYTIME = 10
+    
 class RelayState(Enum):
     OFF = 0
     ON = 1
