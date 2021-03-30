@@ -16,7 +16,7 @@ matplotlib.use('Qt5Agg')
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
-import pandas as pd
+#import pandas as pd
 import numpy as np
 
 
@@ -171,6 +171,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         t = t2.strftime("%H:%M:%S")
         self.xdata = list(range(self.maxdatalength))
 
+        ledstate = 1 if self.led_relay.text == "ON" else 0
         if len(self.ydata) < self.maxdatalength:
             #self.xdata = ([0] * (self.maxdatalength-1)) + [t]
             self.tmpdata = [temp] * (self.maxdatalength)
@@ -181,7 +182,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             #self.xdata = self.xdata[1:] + [t]
             self.tmpdata = self.tmpdata[1:] + [temp]
             self.spdata = self.spdata[1:] + [self.setpoint]
-            self.rdata = self.rdata[1:] + [int(self.led_relay.value)]
+            self.rdata = self.rdata[1:] + [ledstate]
             self.avg = [self.average(self.tmpdata)] * self.maxdatalength
 
         self.ydata = self.tmpdata
@@ -208,14 +209,15 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 t=time()
                 v = self.lcdNumber_2.value()
                 if temp != v:
-                    self.add_db_event(0,time=t,rs=int(self.led_relay.value),temp=v)
+                    ledstate = 1 if self.led_relay.text == "ON" else 0
+                    self.add_db_event(0,time=t,rs=int(ledstate),temp=v)
                 self.lcdNumber_2.display(temp)
                 self.plot_temps(round(t),temp)
 
             elif topic == Topics.RELAY_STATE.value:
-                self.led_relay.value =  = "ON" if int(data) == 1 else "OFF"
+                self.led_relay.setText("ON" if int(data) == 1 else "OFF")
             elif topic == Topics.COMPR_PROTECTION_STATE.value:
-                self.led_ptime.value =  = "ON" if int(data) == 1 else "OFF"
+                self.led_ptime.setText("ON" if int(data) == 1 else "OFF")
             elif topic == Topics.ONTIME.value:
                 self.ontime = int(data)
                 on_percentage = float(self.ontime)*100/float(self.ontime + self.offtime)
@@ -228,7 +230,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 if self.setpoint != int(data):
                     self.setpoint = int(data)
             elif topic == Topics.RELAYTIME.value:                
-                if self.led_relay.value == True:
+                if self.led_relay.text == "ON":
                     self.relayOnTime = int(data)
                     self.relayOffTime = 0
                 else:
