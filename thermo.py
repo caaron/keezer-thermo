@@ -38,7 +38,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         Ui_MainWindow.__init__(self)
         self.setupUi(self)
         self.context = zmq.Context()
-        self.rpi_IP = "10.0.0.203"
+        self.rpi_IP = "10.0.0.197"
         self.rcvsocket = self.context.socket(zmq.SUB)
         #setup receiving set temp socket (publish port on the rpi side)
         self.rcvsocket.connect("tcp://%s:%s" % (self.rpi_IP,Ports.PUBLISH_PORT.value))
@@ -57,8 +57,8 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.pushButton_2.clicked.connect(self.sp_up_pressed)
         self.pushButton.clicked.connect(self.sp_down_pressed)
-        self.pushButton_enable.clicked.connect(self.enable_pressed)
-        self.pushButton_toggle.clicked.connect(self.toggle_pressed)
+        #self.pushButton_enable.clicked.connect(self.enable_pressed)
+        #self.pushButton_toggle.clicked.connect(self.toggle_pressed)
 
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.update_display)
@@ -96,6 +96,8 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         
         self.ontime = 0
         self.offtime = 0
+        self.relayOnTime = 0
+        self.relayOffTime = 0
         
         self.sql = sqlite3.connect("keezer.sql")
         self.sql_tablename = "events"
@@ -217,14 +219,23 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             elif topic == Topics.ONTIME.value:
                 self.ontime = int(data)
                 on_percentage = float(self.ontime)*100/float(self.ontime + self.offtime)
-                self.label_ontime.setText("ON:%.1f%%\n%s seconds" % (on_percentage, int(data)))
+                self.label_ontime.setText("ON:%d\n%.1f%%\n%s seconds" % (self.relayOnTime,on_percentage, int(data)))
             elif topic == Topics.OFFTIME.value:
                 self.offtime = int(data)
                 off_percentage = float(self.offtime)*100/float(self.ontime + self.offtime)
-                self.label_offtime.setText("OFF:%.1f%%\n%s seconds" % (off_percentage,  int(data)))
+                self.label_offtime.setText("OFF:%d\n%.1f%%\n%s seconds" % (self.relayOffTime,off_percentage,  int(data)))
             elif topic == Topics.SETPOINT.value:
                 if self.setpoint != int(data):
                     self.setpoint = int(data)
+            elif topic == Topics.RELAYTIME.value:                
+                if self.led_relay.value == True:
+                    self.relayOnTime = int(data)
+                    self.relayOffTime = 0
+                else:
+                    self.relayOffTime = int(data)
+                    self.relayOnTime = 0
+
+                    
 
                 #print("rcvd setpoint")
 
