@@ -4,7 +4,7 @@ from time import sleep
 
 from PyQt5 import QtCore, QtGui, QtWidgets, uic
 from PyQt5.QtWidgets import QVBoxLayout
-from QLed import QLed
+#from QLed import QLed
 import zmq
 from enums import RelayState,Topics,Ports
 
@@ -45,13 +45,13 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.timer.start(1000)  # every 1000 milliseconds
 
         self.label_relaystate.setText("Relay State")
-        self.led_relay = QLed(self, onColour=QLed.Green, shape=QLed.Circle)
-        self.led_relay.value = False
+        self.led_relay = QtWidgets.QLabel("OFF")
+        #self.led_relay.setReadOnly(True)
         self.gridLayout_relay.addWidget(self.led_relay)
 
         self.label_comp_protect_state.setText("Comp Timer")
-        self.led_ptime = QLed(self, onColour=QLed.Red, shape=QLed.Circle)
-        self.led_ptime.value = False
+        self.led_ptime = QtWidgets.QLabel("ON")
+        #self.led_ptime.setReadOnly(True)
         self.gridLayout_protection.addWidget(self.led_ptime)
 
 
@@ -78,11 +78,11 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.label_2.show()
             elif topic == Topics.RELAY_STATE.value:
                 self.label_relaystate.hide()
-                self.led_relay.value = bool(int(data))
+                self.led_relay.value = "ON" if int(data) == 1 else "OFF"
                 sleep(.5)
                 self.label_relaystate.show()
             elif topic == Topics.COMPR_PROTECTION_STATE.value:
-                self.led_ptime.value = bool(int(data))
+                self.led_ptime.value = "ON" if int(data) == 1 else "OFF"
 
             topic, data = self.get_msgs()
 
