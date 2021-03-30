@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>388</width>
-    <height>510</height>
+    <width>1024</width>
+    <height>600</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -120,8 +120,8 @@
    <widget class="QPushButton" name="pushButton_enable">
     <property name="geometry">
      <rect>
-      <x>258</x>
-      <y>350</y>
+      <x>290</x>
+      <y>490</y>
       <width>101</width>
       <height>25</height>
      </rect>
@@ -136,8 +136,8 @@
     </property>
     <property name="geometry">
      <rect>
-      <x>258</x>
-      <y>380</y>
+      <x>290</x>
+      <y>530</y>
       <width>101</width>
       <height>25</height>
      </rect>
@@ -186,13 +186,66 @@
     </property>
     <layout class="QGridLayout" name="gridLayout_protection"/>
    </widget>
+   <widget class="QLabel" name="label_ontime">
+    <property name="geometry">
+     <rect>
+      <x>210</x>
+      <y>330</y>
+      <width>181</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>17</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>TextLabel</string>
+    </property>
+    <property name="wordWrap">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_offtime">
+    <property name="geometry">
+     <rect>
+      <x>210</x>
+      <y>410</y>
+      <width>181</width>
+      <height>71</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>17</pointsize>
+     </font>
+    </property>
+    <property name="text">
+     <string>TextLabel</string>
+    </property>
+    <property name="wordWrap">
+     <bool>true</bool>
+    </property>
+   </widget>
+   <widget class="QWidget" name="gridLayoutWidget_3">
+    <property name="geometry">
+     <rect>
+      <x>410</x>
+      <y>10</y>
+      <width>611</width>
+      <height>541</height>
+     </rect>
+    </property>
+    <layout class="QGridLayout" name="plotLayout"/>
+   </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>388</width>
+     <width>1024</width>
      <height>22</height>
     </rect>
    </property>
