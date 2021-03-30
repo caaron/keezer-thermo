@@ -21,7 +21,7 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 
 
 class keezer:
-    def __init__(self,t=38.0,h=2.0):
+    def __init__(self,t=38.0,h=1.0):
         self.temperature = t
         self.humidity = 0
         self.air_temperature = t
@@ -40,7 +40,8 @@ class keezer:
         self.sql = sqlite3.connect("keezer.sql")
         self.ontime = 1
         self.offtime = 1
-        self.relayTime = 0
+        self.relayStateTime = 0
+        self.relayTime = time()
         self.relayChangeTime = time()
         from datetime import datetime
 
@@ -99,7 +100,19 @@ class keezer:
 
             print('creating table.')
             create_table(self.sql, sql_create_projects_table)
-        
+
+    def publish_stat_to_influx(self, name, data):
+        try:
+            # publish temperature to influx DB
+            point = Point("temp")\
+                .tag("host", "host1")\
+                .field(name, data)\
+                .time(datetime.datetime.utcnow(), WritePrecision.NS)
+            self.write_api.write(self.influx_bucket, self.influx_org, point)
+
+        except Exception as e:
+            print("Exception on influxDB write!")
+
 
     def do_sockets(self):
         topic, data = self.sockets.read_sockets()
@@ -123,35 +136,47 @@ class keezer:
         self.sockets.publish_int(Topics.OFFTIME.value, self.offtime)
         self.sockets.publish_int(Topics.SETPOINT.value, self.setpoint)
         self.sockets.publish_int(Topics.AIR_TEMPERATURE.value, self.air_temperature)
-        
-        try:
+        self.sockets.publish_int(Topics.RELAYTIME.value, self.relayStateTime)
             # publish temperature to influx DB
-            point = Point("temp")\
-                .tag("host", "host1")\
-                .field("temperature", self.temperature)\
-                .time(datetime.datetime.utcnow(), WritePrecision.NS)
-            self.write_api.write(self.influx_bucket, self.influx_org, point)
+        self.publish_stat_to_influx("temperature", self.temperature)
             # publish DHT11 temperature to influx DB
-            point = Point("temp")\
-                .tag("host", "host1")\
-                .field("air_temperature", self.air_temperature)\
-                .time(datetime.datetime.utcnow(), WritePrecision.NS)
-            self.write_api.write(self.influx_bucket, self.influx_org, point)
+        self.publish_stat_to_influx("air_temperature", self.air_temperature)            
             # publish DHT11 humidity to influx DB
-            point = Point("temp")\
-                .tag("host", "host1")\
-                .field("DHT_humidity", self.humidity)\
-                .time(datetime.datetime.utcnow(), WritePrecision.NS)
-            self.write_api.write(self.influx_bucket, self.influx_org, point)
+        self.publish_stat_to_influx("DHT_humidity", self.humidity)
             # publish relaystate to influx DB
-            point = Point("temp")\
-                .tag("host", "host1")\
-                .field("RelayState", int(self.relay_state.value))\
-                .time(datetime.datetime.utcnow(), WritePrecision.NS)
-            self.write_api.write(self.influx_bucket, self.influx_org, point)
+        self.publish_stat_to_influx("RelayState", int(self.relay_state.value))
 
-        except Exception as e:
-            print("Exception on influxDB write!")
+        if False:
+            try:
+                # publish temperature to influx DB
+                point = Point("temp")\
+                    .tag("host", "host1")\
+                    .field("temperature", self.temperature)\
+                    .time(datetime.datetime.utcnow(), WritePrecision.NS)
+                self.write_api.write(self.influx_bucket, self.influx_org, point)
+                # publish DHT11 temperature to influx DB
+                point = Point("temp")\
+                    .tag("host", "host1")\
+                    .field("air_temperature", self.air_temperature)\
+                    .time(datetime.datetime.utcnow(), WritePrecision.NS)
+                self.write_api.write(self.influx_bucket, self.influx_org, point)
+                # publish DHT11 humidity to influx DB
+                point = Point("temp")\
+                    .tag("host", "host1")\
+                    .field("DHT_humidity", self.humidity)\
+                    .time(datetime.datetime.utcnow(), WritePrecision.NS)
+                self.write_api.write(self.influx_bucket, self.influx_org, point)
+                # publish relaystate to influx DB
+                point = Point("temp")\
+                    .tag("host", "host1")\
+                    .field("RelayState", int(self.relay_state.value))\
+                    .time(datetime.datetime.utcnow(), WritePrecision.NS)
+                self.write_api.write(self.influx_bucket, self.influx_org, point)
+                if int(self.relay_state.value) != 0 and int(self.relay_state.value) != 1:
+                    print("relat state is %f" % self.relay_state.value)
+            except Exception as e:
+                print("Exception on influxDB write!")
+
 
         #data = "mem,host=host1 used_percent=23.43234543"
         #self.write_api.write(self.influx_bucket, self.influx_org, data)
@@ -191,13 +216,23 @@ class keezer:
             self.failsafe = True    # don't allow us to turn back on (since we don't start the protection timer again)
             # should sound some kind of alarm
 
-    def do_relay_times(self):
+    def do_relay_times_after_change(self):
         diff = time() - self.relayChangeTime
         if self.relay_state == RelayState.ON:
             self.offtime += diff
         else:
             self.ontime += diff
         self.relayChangeTime = time()
+        self.relayStateTime = 0
+
+    def do_relay_times(self):
+        diff = time() - self.relayTime
+        if self.relay_state == RelayState.ON:
+            self.ontime += diff
+        else:
+            self.offtime += diff
+        self.relayStateTime += int(diff)
+        self.relayTime = time()
 
     def relay_on(self):
         self.relay_state = RelayState.ON
@@ -205,7 +240,7 @@ class keezer:
         # switch value changed, restart relay timer
         self.start_protection_timer()
         print("compressor on")
-        self.do_relay_times()
+        self.do_relay_times_after_change()
         # todo: implement the on time protection timer
         #threading.Timer(self.compressor_max_on_time * 60.0, self.on_time_protection_check_handler).start()
 
@@ -216,7 +251,7 @@ class keezer:
         self.start_protection_timer()
         # check and kill any protection timers
         print("compressor off")
-        self.do_relay_times()
+        self.do_relay_times_after_change()
 
     def relay_toggle(self):
         if self.relay_state == RelayState.OFF:
@@ -261,6 +296,7 @@ class keezer:
             while not self.signal_exit:
                 self.do_sockets()
                 self.do_thermostat()
+                self.do_relay_times()
                 #threading.Timer(1, self.service).start()
                 #if True:  #(self.count % 10) == 0:
                 if self.last_temp != self.temperature:

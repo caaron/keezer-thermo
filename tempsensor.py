@@ -41,6 +41,8 @@ class tempsensor:
                         if err is DHT11Result.ERR_NO_ERROR:
                             self.temp = r.temperature_f
                             self.humidity = r.humidity
+                        else:
+                            time.sleep(2)
                         result = self.temp
                     
                 elif type(self.sensor) == DS18B20: 

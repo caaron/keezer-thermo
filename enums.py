@@ -16,6 +16,7 @@ class Topics(Enum):
     ONTIME = 7
     OFFTIME = 8
     AIR_TEMPERATURE = 9
+    RELAYTIME = 10
 
 class RelayState(Enum):
     OFF = 0
