@@ -20,7 +20,7 @@ from matplotlib.figure import Figure
 import numpy as np
 
 
-qtCreatorFile = "gui.ui" # Enter file here.
+qtCreatorFile = "/home/linaro/dev/keezer-thermo/gui.ui" # Enter file here.
 Ui_MainWindow, QtBaseClass = uic.loadUiType(qtCreatorFile)
 
 class MplCanvas(FigureCanvasQTAgg):
