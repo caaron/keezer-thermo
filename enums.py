@@ -17,8 +17,16 @@ class Topics(Enum):
     OFFTIME = 8
     AIR_TEMPERATURE = 9
     RELAYTIME = 10
+    CO2_LEVEL = 11
+    CO2_WEIGHT = 12
 
 class RelayState(Enum):
     OFF = 0
     ON = 1
     TOGGLE = 2
+
+class LoadCells(Enum):
+    CO2 = 0
+    KEG1 = 1
+    KEG2 = 2
+    KEG3 = 3

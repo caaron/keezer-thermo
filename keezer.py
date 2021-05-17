@@ -1,5 +1,5 @@
+from hx711 import HX711
 import ASUS.GPIO as GPIO
-
 import threading
 from time import sleep,time
 import datetime
@@ -8,7 +8,7 @@ from keezer_sockets import keezer_sockets
 from sensortypes import sensorType
 import sqlite3
 from sqlite3 import Error
-
+from tank import Tank
 from enums import Ports,Topics,RelayState
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
@@ -21,7 +21,7 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 
 
 class keezer:
-    def __init__(self,t=38.0,h=1.0):
+    def __init__(self,t=36.0,h=1.0):
         self.temperature = t
         self.humidity = 0
         self.air_temperature = t
@@ -37,7 +37,7 @@ class keezer:
         self.compressor_max_on_time = 5   # in minutes
         self.failsafe = False
         self.simulate = False
-        self.sql = sqlite3.connect("keezer.sql")
+        #self.sql = sqlite3.connect("keezer.sql")
         self.ontime = 1
         self.offtime = 1
         self.relayStateTime = 0
@@ -73,6 +73,15 @@ class keezer:
         # add the sensors in order of priority, first added will be primary
         self.sensors.append(tempsensor(type=sensorType.DS18B20,pin=999))
         self.sensors.append(tempsensor(type=sensorType.DHT11,pin=18))
+
+        # I had to follow this pinout to find the proper pins
+        # for BOARD.BCM
+        # https://www.raspberrypi.org/documentation/usage/gpio/
+        self.load_cells = []
+        self.load_cells.append(Tank(dryWeight=3084,s=HX711(dout=25,pd_sck=23)))
+        # this is just setting the full weight based on the current weight, not a long term solution
+        self.load_cells[0].set_full_weight(self.load_cells[0].get_weight())
+
 
     def __del__(self):
         if self.sql:
@@ -137,6 +146,9 @@ class keezer:
         self.sockets.publish_int(Topics.SETPOINT.value, self.setpoint)
         self.sockets.publish_int(Topics.AIR_TEMPERATURE.value, self.air_temperature)
         self.sockets.publish_int(Topics.RELAYTIME.value, self.relayStateTime)
+        self.sockets.publish_int(Topics.CO2_LEVEL.value, self.load_cells[0].level)
+        self.sockets.publish_int(Topics.CO2_WEIGHT.value, self.load_cells[0].weight)
+        
             # publish temperature to influx DB
         self.publish_stat_to_influx("temperature", self.temperature)
             # publish DHT11 temperature to influx DB
@@ -181,6 +193,9 @@ class keezer:
         #data = "mem,host=host1 used_percent=23.43234543"
         #self.write_api.write(self.influx_bucket, self.influx_org, data)
         
+    def do_load_cells(self):
+        for tank in self.load_cells:
+            tank.get_weight()
 
     def do_temperatures(self):
         # average the temp sensors? 
@@ -192,7 +207,7 @@ class keezer:
         # right now, only use the first sensor
         self.temperature = tmp[0]
         self.humidity = humids[1]
-        if tmp[1] > 0 and tmp[1] < 70:
+        if tmp[1] > 0 and tmp[1] < 100:
             self.air_temperature = tmp[1]
         else:
             print("received an out of bounds DHT temp!!")
@@ -286,6 +301,7 @@ class keezer:
         print("ontime:%.2f  %d seconds" % (on_percentage,self.ontime))
         off_percentage = float(self.offtime)*100/float(self.ontime + self.offtime)
         print("offtime:%.2f  %d seconds" % (off_percentage,self.offtime))
+        print("CO2 weight:%f  CO2_level:%f" %(self.load_cells[0].weight, self.load_cells[0].level)) 
         print("")
 
     def service(self):
@@ -297,6 +313,7 @@ class keezer:
                 self.do_sockets()
                 self.do_thermostat()
                 self.do_relay_times()
+                self.do_load_cells()
                 #threading.Timer(1, self.service).start()
                 #if True:  #(self.count % 10) == 0:
                 if self.last_temp != self.temperature:
