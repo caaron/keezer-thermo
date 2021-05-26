@@ -27,9 +27,10 @@ class MplCanvas(FigureCanvasQTAgg):
 
     def __init__(self, parent=None, width=5, height=4, dpi=100):
         fig = Figure(figsize=(width, height), dpi=dpi)
-        self.axes = fig.add_subplot(111)
+        self.axes = fig.add_subplot(221)
         self.ax2 = self.axes.twinx()
         self.ax2.set_ylim(-2,2)
+        self.ax3 = fig.add_subplot(223)
         super(MplCanvas, self).__init__(fig)
 
 class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
@@ -84,6 +85,8 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.spdata = []
         self.rdata = []
         self.ydata = []        
+        self.co2data = []
+        self.CO2_weight = 0
         #self._plot_ref = None
 
         if False:
@@ -170,6 +173,8 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         t2 = datetime.datetime.fromtimestamp(time)
         t = t2.strftime("%H:%M:%S")
         self.xdata = list(range(self.maxdatalength))
+        
+        tmp = self.label_co2_weight.text()
 
         ledstate = 1 if self.led_relay.text == "ON" else 0
         if len(self.ydata) < self.maxdatalength:
@@ -178,12 +183,14 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.spdata = [self.setpoint] * self.maxdatalength
             self.rdata = [0] * self.maxdatalength
             self.avg = [self.average(self.tmpdata)] * self.maxdatalength
+            self.co2data = [self.CO2_weight] * self.maxdatalength
         else:
             #self.xdata = self.xdata[1:] + [t]
             self.tmpdata = self.tmpdata[1:] + [temp]
             self.spdata = self.spdata[1:] + [self.setpoint]
             self.rdata = self.rdata[1:] + [ledstate]
             self.avg = [self.average(self.tmpdata)] * self.maxdatalength
+            self.co2data = self.co2data[1:] + [self.CO2_weight]
 
         self.ydata = self.tmpdata
         #if self._plot_ref is None:
@@ -197,7 +204,14 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.sc.axes.plot(self.xdata,self.avg,'tab:orange')
         self.sc.ax2.cla()
         self.sc.ax2.plot(self.xdata,self.rdata,'g')
+        #self.sc.draw()
+        self.sc.ax3.cla()
+        self.sc.ax3.plot(self.xdata,self.co2data,'b')
         self.sc.draw()
+        #self.sc.ax3.draw()
+        #self.sc.ax3.title('CO2')
+        
+
 
 
 
@@ -236,6 +250,19 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 else:
                     self.relayOffTime = int(data)
                     self.relayOnTime = 0
+            elif topic == Topics.CO2_LEVEL.value:
+                tmp = int(data)
+                if tmp > 100:
+                    tmp = 100
+                elif tmp < 0:
+                    tmp = 0
+                self.CO2_progressBar.setValue(tmp)
+                if self.CO2_progressBar.isTextVisible() is True:
+                    self.CO2_progressBar.text = str(tmp)
+            elif topic == Topics.CO2_WEIGHT.value:
+                self.CO2_weight = float(data)
+                self.label_co2_weight.setText("%.1f grams" % (self.CO2_weight))
+                    
 
                 #print("rcvd setpoint")
 
