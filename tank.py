@@ -5,6 +5,7 @@ class Tank:
     def __init__(self,fullWeight=0,dryWeight=0,s=None) -> None:
         self.weight = 0
         self.level = 0
+        self.value = 0
         self.dry_weight = dryWeight
         self.full_weight = fullWeight
         self.sensor = s
@@ -13,7 +14,7 @@ class Tank:
         self.sensor.set_reading_format("MSB", "MSB")
         self.sensor.set_reference_unit(57)
         self.sensor.reset()
-        self.tare()
+        #self.tare()
 
     def tare(self):
 #        self.full_weight = self.sensor.tare()
@@ -28,3 +29,7 @@ class Tank:
         # level = (weight - dry_weight) / (full_weight - dry_weight) %
         self.level = ((100.0/self.dry_weight) * self.weight) + 100
         return self.weight
+
+    def get_value(self):
+        self.value = self.sensor.get_value()
+        return self.value

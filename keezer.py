@@ -147,7 +147,9 @@ class keezer:
         self.sockets.publish_int(Topics.AIR_TEMPERATURE.value, self.air_temperature)
         self.sockets.publish_int(Topics.RELAYTIME.value, self.relayStateTime)
         self.sockets.publish_int(Topics.CO2_LEVEL.value, self.load_cells[0].level)
-        self.sockets.publish_int(Topics.CO2_WEIGHT.value, self.load_cells[0].weight)
+        self.sockets.publish_int(Topics.CO2_WEIGHT.value, self.load_cells[0].value)
+        self.sockets.publish_int(Topics.AIR_HUMIDITY.value, self.humidity)
+        
         
             # publish temperature to influx DB
         self.publish_stat_to_influx("temperature", self.temperature)
@@ -196,6 +198,7 @@ class keezer:
     def do_load_cells(self):
         for tank in self.load_cells:
             tank.get_weight()
+            tank.get_value()
 
     def do_temperatures(self):
         # average the temp sensors? 

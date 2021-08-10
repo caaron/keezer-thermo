@@ -19,6 +19,7 @@ class Topics(Enum):
     RELAYTIME = 10
     CO2_LEVEL = 11
     CO2_WEIGHT = 12
+    AIR_HUMIDITY = 13
 
 class RelayState(Enum):
     OFF = 0
