@@ -6,12 +6,11 @@ import datetime
 from tempsensor import tempsensor
 from keezer_sockets import keezer_sockets
 from sensortypes import sensorType
-import sqlite3
-from sqlite3 import Error
+#import sqlite3
 from tank import Tank
 from enums import Ports,Topics,RelayState
-from influxdb_client import InfluxDBClient, Point, WritePrecision
-from influxdb_client.client.write_api import SYNCHRONOUS
+#from influxdb_client import InfluxDBClient, Point, WritePrecision
+#from influxdb_client.client.write_api import SYNCHRONOUS
 
 # when this can't start because it can't open the GPIO
 #"Unable to set line 23 to input"
@@ -21,7 +20,7 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 
 
 class keezer:
-    def __init__(self,t=36.0,h=1.0):
+    def __init__(self,t=39.0,h=1.0):
         self.temperature = t
         self.humidity = 0
         self.air_temperature = t
@@ -47,12 +46,12 @@ class keezer:
 
 
         # You can generate a Token from the "Tokens Tab" in the UI
-        self.influx_token = "LS_CSh06vCL049Eiuk1NrC2Q9XQdtHOh0KX5f3cP6KSWiPDk5uBvQ_0mOQIO1IFidbd2XMH5T_G-FoGfT5aqRg=="
-        self.influx_org = "c.aaron.hall@gmail.com"
-        self.influx_bucket = "c.aaron.hall's Bucket"
+#        self.influx_token = "LS_CSh06vCL049Eiuk1NrC2Q9XQdtHOh0KX5f3cP6KSWiPDk5uBvQ_0mOQIO1IFidbd2XMH5T_G-FoGfT5aqRg=="
+#        self.influx_org = "c.aaron.hall@gmail.com"
+#        self.influx_bucket = "c.aaron.hall's Bucket"
 
-        self.influx_client = InfluxDBClient(url="https://us-central1-1.gcp.cloud2.influxdata.com", token=self.influx_token)
-        self.write_api = self.influx_client.write_api(write_options=SYNCHRONOUS)
+#        self.influx_client = InfluxDBClient(url="https://us-central1-1.gcp.cloud2.influxdata.com", token=self.influx_token)
+#        self.write_api = self.influx_client.write_api(write_options=SYNCHRONOUS)
 
         #data = "mem,host=host1 used_percent=23.43234543"
         #self.write_api.write(self.influx_bucket, self.influx_org, data)
@@ -152,13 +151,13 @@ class keezer:
         
         
             # publish temperature to influx DB
-        self.publish_stat_to_influx("temperature", self.temperature)
+ #       self.publish_stat_to_influx("temperature", self.temperature)
             # publish DHT11 temperature to influx DB
-        self.publish_stat_to_influx("air_temperature", self.air_temperature)            
+#        self.publish_stat_to_influx("air_temperature", self.air_temperature)            
             # publish DHT11 humidity to influx DB
-        self.publish_stat_to_influx("DHT_humidity", self.humidity)
+#        self.publish_stat_to_influx("DHT_humidity", self.humidity)
             # publish relaystate to influx DB
-        self.publish_stat_to_influx("RelayState", int(self.relay_state.value))
+#        self.publish_stat_to_influx("RelayState", int(self.relay_state.value))
 
         if False:
             try:
