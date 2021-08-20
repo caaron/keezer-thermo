@@ -10,29 +10,28 @@ from PyQt5.QtWidgets import QVBoxLayout
 #from QLed import QLed
 import zmq
 from enums import RelayState,Topics,Ports
-import sqlite3
 import sys
 import matplotlib
 matplotlib.use('Qt5Agg')
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
-#import pandas as pd
 import numpy as np
 
 
-qtCreatorFile = "/home/linaro/dev/keezer-thermo/gui.ui" # Enter file here.
+qtCreatorFile = "gui.ui" # Enter file here.
 Ui_MainWindow, QtBaseClass = uic.loadUiType(qtCreatorFile)
 
 class MplCanvas(FigureCanvasQTAgg):
 
     def __init__(self, parent=None, width=5, height=4, dpi=100):
         fig = Figure(figsize=(width, height), dpi=dpi)
-        self.axes = fig.add_subplot(221)
-        self.ax2 = self.axes.twinx()
+        self.ax1 = fig.add_subplot(221)
+        self.ax2 = self.ax1.twinx()
         self.ax2.set_ylim(-2,2)
-        self.ax3 = fig.add_subplot(223)
-        self.ax4 = fig.add_subplot(224)
+        self.ax3 = fig.add_subplot(222)
+        self.ax4 = fig.add_subplot(223)
+        self.ax5 = fig.add_subplot(224)
         super(MplCanvas, self).__init__(fig)
 
 class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
@@ -56,8 +55,11 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         self.temperature = None
         self.air_temperature = None
+        self.humidity = None
         self.setpoint = 38
         self.lcdNumber.display("%.1f" % self.setpoint)
+
+        self.useSQL = False
 
         self.pushButton_2.clicked.connect(self.sp_up_pressed)
         self.pushButton.clicked.connect(self.sp_down_pressed)
@@ -77,9 +79,9 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.led_ptime = QtWidgets.QLabel("ON")
         #self.led_ptime.setReadOnly(True)
         self.gridLayout_protection.addWidget(self.led_ptime)
-
+        
          # Create the maptlotlib FigureCanvas object, 
-        # which defines a single set of axes as self.axes.
+        # which defines a single set of axes as self.ax1.
         self.sc = MplCanvas(self, width=5, height=4, dpi=100)
         
         self.maxdatalength = 2500
@@ -88,6 +90,7 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.water_temperature_data = deque([],self.maxdatalength)
         self.air_temperature_data = deque([],self.maxdatalength)
         self.co2data = deque([],self.maxdatalength)
+        self.humidity_data = deque([],self.maxdatalength)
 
         self.plotLayout.addWidget(self.sc)
         
@@ -96,11 +99,12 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.relayOnTime = 0
         self.relayOffTime = 0
         self.CO2_weight = None
-        
-        self.sql = sqlite3.connect("keezer.sql")
-        self.sql_tablename = "events"
         tmp = time()
-        self.init_db(self.sql)
+        
+        if self.useSQL:
+            self.sql = sqlite3.connect("keezer.sql")
+            self.sql_tablename = "events"
+            self.init_db(self.sql)
         
     def __del__(self):
         if self.sql:
@@ -164,6 +168,9 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         avg = avg / len(x)
         return avg
 
+    def all_valid(self,items):
+        return all(x is not None for x in items)
+
     def plot_temps(self,time,temp):
         t2 = datetime.datetime.fromtimestamp(time)
         t = t2.strftime("%H:%M:%S")
@@ -172,29 +179,39 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         tmp = self.label_co2_weight.text()
 
         ledstate = 1 if self.led_relay.text() == "ON" else 0
+        required_values = [self.temperature, self.air_temperature, self.humidity]
+        self.sc.ax1.cla()
+        self.sc.ax2.cla()
+        self.sc.ax3.cla()
+        self.sc.ax4.cla()
+        self.sc.ax5.cla()
         
-        if self.temperature is not None and self.air_temperature is not None:
+        #if self.all_valid(required_values):
+
+        #if self.temperature is not None and self.air_temperature is not None:
+        if self.temperature is not None:
             self.water_temperature_data.append(self.temperature)
             self.setpoint_data.append(self.setpoint)
             self.relay_data.append(ledstate)
             self.air_temperature_data.append(self.air_temperature)
+            self.humidity_data.append(self.humidity)
             x = list(range(len(self.water_temperature_data)))
             self.avg = [self.average(self.water_temperature_data)] * len(x)
 
-            self.sc.axes.cla()
-            self.sc.axes.plot(x,self.water_temperature_data,'r',label='water temperature')
-            self.sc.axes.plot(x,self.setpoint_data,'b',label='setpoint')
-            self.sc.axes.plot(x,self.avg,'tab:orange',label='average')
-            self.sc.ax2.cla()
+            self.sc.ax1.plot(x,self.water_temperature_data,'r',label='water temperature')
+            self.sc.ax1.plot(x,self.setpoint_data,'b',label='setpoint')
+            self.sc.ax1.plot(x,self.avg,'tab:orange',label='average')
             self.sc.ax2.plot(x,self.relay_data,'g')
             self.sc.ax2.set_title('Temperature')
-            self.sc.ax4.cla()
+            self.sc.ax1.legend(loc='lower left', bbox_to_anchor= (0.0, 1.01), ncol=2, borderaxespad=0, frameon=False)
+
+        if self.air_temperature is not None:
             self.sc.ax4.plot(x,self.air_temperature_data,'tab:purple',label='air temp')
             self.sc.ax4.set_title('Air Temperature')
-            #self.sc.ax2.legend(['Relay State'])
-            #self.sc.axes.legend(['Water Temperature','Setpoint','Average','Air Temperature'],loc='upper left')
-            self.sc.axes.legend(loc='lower left', bbox_to_anchor= (0.0, 1.01), ncol=2, borderaxespad=0, frameon=False)
-            self.sc.draw()
+
+        if self.humidity is not None:
+            self.sc.ax5.plot(x,self.humidity_data,'tab:orange',label='humidity')
+            self.sc.ax5.set_title('Humidity')
         
         if self.CO2_weight is not None:
             self.co2data.append(self.CO2_weight)
@@ -202,7 +219,8 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.sc.ax3.cla()
             self.sc.ax3.plot(x,self.co2data,'b')
             self.sc.ax3.set_title('CO2')
-            self.sc.draw()
+
+        self.sc.draw()
 
 
 
@@ -216,7 +234,8 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 v = self.lcdNumber_2.value()
                 if temp != v:
                     ledstate = 1 if self.led_relay.text == "ON" else 0
-                    self.add_db_event(0,time=t,rs=int(ledstate),temp=v)
+                    if self.useSQL:
+                        self.add_db_event(0,time=t,rs=int(ledstate),temp=v)
                 self.lcdNumber_2.display(temp)
                 self.temperature = temp
                 self.plot_temps(round(t),temp)
@@ -257,6 +276,8 @@ class MyWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 self.label_co2_weight.setText("%.1f grams" % (self.CO2_weight))
             elif topic == Topics.AIR_TEMPERATURE.value:
                 self.air_temperature = float(data)
+            elif topic == Topics.AIR_HUMIDITY.value:
+                self.humidity = float(data)
 
                 #print("rcvd setpoint")
 
