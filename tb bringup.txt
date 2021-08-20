@@ -1,0 +1,9 @@
+Uses tinkerboard
+need to install
+pyqt5-dev x11vnc git python3-pip vim libfreetype6-dev pkg-config libpng-dev htop python3-setuptools python3-wheel python3-zmq python3-pyqt5 qt5-default
+https://tinkerboarding.co.uk/forum/archive/index.php/thread-1041.html
+pip3 install setuptools numpy cython matplotlib
+https://github.com/TinkerBoard/gpio_lib_python
+
+Enable the 1 wire, add "intf:dtoverlay=w1-gpio" to /boot/hw_intf.conf
+https://tinkerboarding.co.uk/wiki/index.php/1-wire
