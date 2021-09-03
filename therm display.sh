@@ -1,3 +1,3 @@
 #!/bin/bash
 
-python3 /home/linaro/dev/keezer-thermo/thermo.py
+python3 /home/linaro/keezer/thermo.py

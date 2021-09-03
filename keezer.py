@@ -83,8 +83,9 @@ class keezer:
 
 
     def __del__(self):
-        if self.sql:
-            self.sql.close()
+        pass
+#        if self.sql:
+#            self.sql.close()
 
     def init_db(self):
         c = self.sql.cursor()
@@ -143,6 +144,8 @@ class keezer:
         self.sockets.publish_int(Topics.ONTIME.value, self.ontime)
         self.sockets.publish_int(Topics.OFFTIME.value, self.offtime)
         self.sockets.publish_int(Topics.SETPOINT.value, self.setpoint)
+        #self.sockets.sndsocket.send_multipart([str.encode("setpoint"), b"%d" % self.setpoint] )
+        #self.sockets.sndsocket.send([str.encode("setpoint"), b"%d" % self.setpoint] )
         self.sockets.publish_int(Topics.AIR_TEMPERATURE.value, self.air_temperature)
         self.sockets.publish_int(Topics.RELAYTIME.value, self.relayStateTime)
         self.sockets.publish_int(Topics.CO2_LEVEL.value, self.load_cells[0].level)
