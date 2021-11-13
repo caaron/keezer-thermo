@@ -1,9 +1,12 @@
+from ds18b20 import DS18B20
+from dht import DHTXX
+import DHTXX as dht11
 from hx711 import HX711
 import ASUS.GPIO as GPIO
 import threading
 from time import sleep,time
 import datetime
-from tempsensor import tempsensor
+from tempsensor import temperature_measurement, tempsensor, tempsensors
 from keezer_sockets import keezer_sockets
 from sensortypes import sensorType
 #import sqlite3
@@ -22,6 +25,8 @@ from enums import Ports,Topics,RelayState
 class keezer:
     def __init__(self,t=39.0,h=1.0):
         self.temperature = t
+        self.temperatures = []
+        self.temperatures.append(temperature_measurement(DS18B20,Topics.KEEZER_WATER_TEMP,t))
         self.humidity = 0
         self.air_temperature = t
         self.setpoint = t
@@ -70,8 +75,12 @@ class keezer:
         self.relay_off()
 
         # add the sensors in order of priority, first added will be primary
-        self.sensors.append(tempsensor(type=sensorType.DS18B20,pin=999))
-        self.sensors.append(tempsensor(type=sensorType.DHT11,pin=18))
+        self.tempsensors = tempsensors()
+        self.tempsensors.addSensor(t=sensorType.DS18B20,pin=999,topic=Topics.KEEZER_WATER_TEMP)
+        self.tempsensors.addSensor(t=sensorType.DS18B20,pin=999,topic=Topics.ROOM_TEMP_DS18B20)
+        self.tempsensors.addSensor(t=sensorType.DS18B20,pin=999,topic=Topics.AIR_TEMP_DS18B20)
+        #self.tempsensors.addSensor(t=sensorType.DHT11,pin=18,topic=Topics.AIR_TEMP_DHT11)
+        #self.sensors.append(tempsensor(type=sensorType.DHT11,pin=18))
 
         # I had to follow this pinout to find the proper pins
         # for BOARD.BCM
@@ -122,6 +131,20 @@ class keezer:
         except Exception as e:
             print("Exception on influxDB write!")
 
+    def hasDHT(self):
+        result = False
+        for s in self.sensors:
+            if type(s.sensor) == dht11.DHT11:
+                result = True
+        return result
+
+    def hasDS18B20(self):
+        result = False
+        for s in self.sensors:
+            if type(s.sensor) == DS18B20:
+                result = True
+        return result
+
 
     def do_sockets(self):
         topic, data = self.sockets.read_sockets()
@@ -138,7 +161,10 @@ class keezer:
             topic, data = self.sockets.read_sockets()
 
     # send the current temp and relay state
-        self.sockets.publish_float(Topics.TEMP.value, self.temperature)
+        if len(self.temperatures) > 0:   
+            for t in self.temperatures:
+                self.sockets.publish_float(t.topic.value, t.temperature)    
+        self.sockets.publish_float(Topics.KEEZER_WATER_TEMP.value, self.temperature)
         self.sockets.publish_int(Topics.RELAY_STATE.value, self.relay_state.value)
         self.sockets.publish_int(Topics.COMPR_PROTECTION_STATE.value, self.compressor_protection_state)
         self.sockets.publish_int(Topics.ONTIME.value, self.ontime)
@@ -146,12 +172,12 @@ class keezer:
         self.sockets.publish_int(Topics.SETPOINT.value, self.setpoint)
         #self.sockets.sndsocket.send_multipart([str.encode("setpoint"), b"%d" % self.setpoint] )
         #self.sockets.sndsocket.send([str.encode("setpoint"), b"%d" % self.setpoint] )
-        self.sockets.publish_int(Topics.AIR_TEMPERATURE.value, self.air_temperature)
         self.sockets.publish_int(Topics.RELAYTIME.value, self.relayStateTime)
         self.sockets.publish_int(Topics.CO2_LEVEL.value, self.load_cells[0].level)
         self.sockets.publish_int(Topics.CO2_WEIGHT.value, self.load_cells[0].value)
-        self.sockets.publish_int(Topics.AIR_HUMIDITY.value, self.humidity)
-        
+        if self.hasDHT() is True:
+            self.sockets.publish_int(Topics.AIR_TEMPERATURE.value, self.air_temperature)
+            self.sockets.publish_int(Topics.AIR_HUMIDITY.value, self.humidity)
         
             # publish temperature to influx DB
  #       self.publish_stat_to_influx("temperature", self.temperature)
@@ -202,20 +228,31 @@ class keezer:
             tank.get_weight()
             tank.get_value()
 
+    def getTemp(self,topic=None):
+        result = None
+        for sensor in self.sensors:
+            if sensor.topic == topic:
+                result = sensor.temperature
+
+        return result
+
     def do_temperatures(self):
         # average the temp sensors? 
         tmp = []
         humids = []
-        for sensor in self.sensors:
-             tmp.append(sensor.read())             
-             humids.append(sensor.read_sensor_humidity())
-        # right now, only use the first sensor
-        self.temperature = tmp[0]
-        self.humidity = humids[1]
-        if tmp[1] > 0 and tmp[1] < 100:
-            self.air_temperature = tmp[1]
-        else:
-            print("received an out of bounds DHT temp!!")
+        #for sensor in self.sensors:
+        #     tmp.append(sensor.read())             
+             #humids.append(sensor.read_sensor_humidity())
+        # right now, only regulate on water temperature
+        #i = self.getTemp(Topics.KEEZER_WATER_TEMP)
+        self.temperatures = self.tempsensors.readAll()
+        self.temperature = self.temperatures[0].temperature
+        if self.hasDHT() is True:
+            self.humidity = humids[1]   # todo: why is this not the first humidity in the list? 
+            if tmp[1] > 0 and tmp[1] < 100:
+                self.air_temperature = tmp[1]
+            else:
+                print("received an out of bounds DHT temp!!")
 
 
     def protection_timer_handler(self):
